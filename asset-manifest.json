@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/Weekly-Planner/static/css/main.9a8018ad.css",
+    "main.js": "/Weekly-Planner/static/js/main.53ef6039.js",
+    "index.html": "/Weekly-Planner/index.html",
+    "main.9a8018ad.css.map": "/Weekly-Planner/static/css/main.9a8018ad.css.map",
+    "main.53ef6039.js.map": "/Weekly-Planner/static/js/main.53ef6039.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.9a8018ad.css",
+    "static/js/main.53ef6039.js"
+  ]
+}
