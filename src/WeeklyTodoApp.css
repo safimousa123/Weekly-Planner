@@ -1,0 +1,11 @@
+/* All of your static CSS goes here */
+.container {
+  /* This is the same CSS from your style jsx block */
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  justify-content: center;
+  align-items: center;
+  font-family: 'Poppins', sans-serif;
+  padding: 1rem;
+}
