@@ -1,4 +1,4 @@
-# Getting To The Onile SIte
+# Getting To The Online SIte
 URL : https://safimousa123.github.io/Weekly-Planner/
 # Getting Started with Create React App
 
