@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Plus, X, Check, Star, Calendar, ChevronLeft, ChevronRight, Grid3X3, List, Settings, Mail, Clock, Save } from 'lucide-react';
 
@@ -12,7 +13,8 @@ const loadEmailJS = () => {
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js';
     script.onload = () => {
-      window.emailjs.init('VUjJfFLFriuA8kpPQ'); // Initialize with public key
+     const publicKey = process.env.REACT_APP_EMAILJS_PUBLIC_KEY || 'VUjJfFLFriuA8kpPQ';
+      window.emailjs.init(publicKey);
       resolve(window.emailjs);
     };
     document.head.appendChild(script);
@@ -37,12 +39,12 @@ export default function WeeklyTodoApp() {
   const [showSettings, setShowSettings] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   
-  // EmailJS configuration (hardcoded)
-    const emailjsConfig = {
-    serviceId: 'service_nzzc51a',
-    templateId: 'template_qe6luxh',
-    publicKey: 'VUjJfFLFriuA8kpPQ'
-  };
+  // EmailJS configuration (hardcoded for artifact demo)
+const emailjsConfig = {
+  serviceId: process.env.REACT_APP_EMAILJS_SERVICE_ID || 'service_nzzc51a',
+  templateId: process.env.REACT_APP_EMAILJS_TEMPLATE_ID || 'template_qe6luxh',
+  publicKey: process.env.REACT_APP_EMAILJS_PUBLIC_KEY || 'VUjJfFLFriuA8kpPQ'
+};
 
   // Reminder timers
   const [activeReminders, setActiveReminders] = useState(new Map());
@@ -58,6 +60,7 @@ export default function WeeklyTodoApp() {
   ];
 
   const reminderOptions = [
+    { value: '28', label: '28 minutes before' },
     { value: '15', label: '15 minutes before' },
     { value: '30', label: '30 minutes before' },
     { value: '60', label: '1 hour before' },
@@ -242,7 +245,11 @@ export default function WeeklyTodoApp() {
 
   // Get date key for storing tasks (YYYY-MM-DD format)
   const getDateKey = (date) => {
-    return date.toISOString().split('T')[0];
+    // Use local date to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   // Check if a date is in the past
@@ -266,8 +273,10 @@ export default function WeeklyTodoApp() {
       const today = new Date();
       const currentDay = today.getDay();
       const daysUntilSelected = selectedDay - currentDay;
-      const selectedDate = new Date();
+      const selectedDate = new Date(today);
       selectedDate.setDate(today.getDate() + daysUntilSelected);
+      // Reset time to avoid timezone issues
+      selectedDate.setHours(0, 0, 0, 0);
       return selectedDate;
     }
     return currentDate;
@@ -597,6 +606,8 @@ export default function WeeklyTodoApp() {
     // Days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+      // Reset time to avoid timezone issues
+      date.setHours(0, 0, 0, 0);
       const dateKey = getDateKey(date);
       const dayTasks = tasks[dateKey] || [];
       const isPast = isPastDate(date);
@@ -719,11 +730,13 @@ export default function WeeklyTodoApp() {
           
           <div className="grid grid-cols-7 gap-2">
             {daysOfWeek.map((day) => {
-              const dayDate = new Date();
               const today = new Date();
+              today.setHours(0, 0, 0, 0); // Reset time to avoid timezone issues
               const currentDay = today.getDay();
               const daysUntilDay = day.key - currentDay;
+              const dayDate = new Date(today);
               dayDate.setDate(today.getDate() + daysUntilDay);
+              dayDate.setHours(0, 0, 0, 0); // Reset time to avoid timezone issues
               
               const dayTasks = getTasksForDate(dayDate);
               const taskCount = dayTasks.length;
@@ -1167,7 +1180,7 @@ export default function WeeklyTodoApp() {
         {/* Settings Modal */}
         {renderSettingsModal()}
 
-        {/* Day Modal */}
+        {/* Day Modal - Continued in next part... */}
         {modalDate && (
           <div 
             className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
