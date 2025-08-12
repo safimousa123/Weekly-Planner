@@ -60,7 +60,6 @@ const emailjsConfig = {
   ];
 
   const reminderOptions = [
-    { value: '28', label: '28 minutes before' },
     { value: '15', label: '15 minutes before' },
     { value: '30', label: '30 minutes before' },
     { value: '60', label: '1 hour before' },

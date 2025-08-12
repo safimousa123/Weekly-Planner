@@ -1,3 +1,5 @@
+# Getting To The Online SIte
+URL : https://safimousa123.github.io/Weekly-Planner/
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
