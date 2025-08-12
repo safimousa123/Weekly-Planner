@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/Weekly-Planner/static/css/main.3937b65f.css",
-    "main.js": "/Weekly-Planner/static/js/main.828ab216.js",
+    "main.css": "/Weekly-Planner/static/css/main.ff87be4a.css",
+    "main.js": "/Weekly-Planner/static/js/main.20dea2a3.js",
     "index.html": "/Weekly-Planner/index.html",
-    "main.3937b65f.css.map": "/Weekly-Planner/static/css/main.3937b65f.css.map",
-    "main.828ab216.js.map": "/Weekly-Planner/static/js/main.828ab216.js.map"
+    "main.ff87be4a.css.map": "/Weekly-Planner/static/css/main.ff87be4a.css.map",
+    "main.20dea2a3.js.map": "/Weekly-Planner/static/js/main.20dea2a3.js.map"
   },
   "entrypoints": [
-    "static/css/main.3937b65f.css",
-    "static/js/main.828ab216.js"
+    "static/css/main.ff87be4a.css",
+    "static/js/main.20dea2a3.js"
   ]
 }
