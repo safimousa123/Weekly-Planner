@@ -1,5 +1,23 @@
 import { useState, useEffect } from 'react';
-import { Plus, X, Check, Star, Calendar, ChevronLeft, ChevronRight, Grid3X3, List } from 'lucide-react';
+import { Plus, X, Check, Star, Calendar, ChevronLeft, ChevronRight, Grid3X3, List, Settings, Mail, Clock, Save } from 'lucide-react';
+
+// Load EmailJS
+const loadEmailJS = () => {
+  return new Promise((resolve) => {
+    if (window.emailjs) {
+      resolve(window.emailjs);
+      return;
+    }
+    
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js';
+    script.onload = () => {
+      window.emailjs.init('VUjJfFLFriuA8kpPQ'); // Initialize with public key
+      resolve(window.emailjs);
+    };
+    document.head.appendChild(script);
+  });
+};
 
 export default function WeeklyTodoApp() {
   const [tasks, setTasks] = useState({});
@@ -12,6 +30,22 @@ export default function WeeklyTodoApp() {
   const [modalDate, setModalDate] = useState(null); // For modal popup
   const [modalInputValue, setModalInputValue] = useState('');
   const [modalSelectedTime, setModalSelectedTime] = useState('');
+  const [modalReminderTime, setModalReminderTime] = useState('30'); // minutes before
+  const [reminderTime, setReminderTime] = useState('30'); // minutes before
+  
+  // Settings state
+  const [showSettings, setShowSettings] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
+  
+  // EmailJS configuration (hardcoded)
+    const emailjsConfig = {
+    serviceId: 'service_nzzc51a',
+    templateId: 'template_qe6luxh',
+    publicKey: 'VUjJfFLFriuA8kpPQ'
+  };
+
+  // Reminder timers
+  const [activeReminders, setActiveReminders] = useState(new Map());
 
   const daysOfWeek = [
     { key: 0, name: 'Sunday', short: 'Sun' },
@@ -23,20 +57,42 @@ export default function WeeklyTodoApp() {
     { key: 6, name: 'Saturday', short: 'Sat' }
   ];
 
-  // Load tasks from localStorage on component mount
+  const reminderOptions = [
+    { value: '15', label: '15 minutes before' },
+    { value: '30', label: '30 minutes before' },
+    { value: '60', label: '1 hour before' },
+    { value: '120', label: '2 hours before' }
+  ];
+
+  // Load data from localStorage on component mount
   useEffect(() => {
     const savedTasks = localStorage.getItem('weekly-todo-tasks');
     if (savedTasks) {
       setTasks(JSON.parse(savedTasks));
     }
     
+    const savedEmail = localStorage.getItem('user-email');
+    if (savedEmail) {
+      setUserEmail(savedEmail);
+    }
+    
+    // Load EmailJS
+    loadEmailJS();
+    
     cleanupOldTasks();
+    scheduleAllReminders();
   }, []);
 
   // Save tasks to localStorage whenever tasks change
   useEffect(() => {
     localStorage.setItem('weekly-todo-tasks', JSON.stringify(tasks));
+    scheduleAllReminders();
   }, [tasks]);
+
+  // Save settings whenever they change
+  useEffect(() => {
+    localStorage.setItem('user-email', userEmail);
+  }, [userEmail]);
 
   // Clean up completed tasks from previous days
   const cleanupOldTasks = () => {
@@ -53,6 +109,134 @@ export default function WeeklyTodoApp() {
       });
       
       localStorage.setItem('last-cleanup-date', today);
+    }
+  };
+
+  // Schedule email reminders for all tasks
+  const scheduleAllReminders = () => {
+    // Clear existing reminders
+    activeReminders.forEach(timeoutId => clearTimeout(timeoutId));
+    const newReminders = new Map();
+
+    Object.keys(tasks).forEach(dateKey => {
+      tasks[dateKey].forEach(task => {
+        if (task.time && task.reminderTime && !task.completed && userEmail) {
+          const reminderTimeout = scheduleTaskReminder(task);
+          if (reminderTimeout) {
+            newReminders.set(task.id, reminderTimeout);
+          }
+        }
+      });
+    });
+
+    setActiveReminders(newReminders);
+  };
+
+  // Schedule individual task reminder
+  const scheduleTaskReminder = (task) => {
+    if (!task.time || !task.reminderTime || task.completed || !userEmail) {
+      return null;
+    }
+
+    const taskDate = new Date(task.dateKey);
+    const [hours, minutes] = task.time.split(':').map(Number);
+    const taskDateTime = new Date(taskDate);
+    taskDateTime.setHours(hours, minutes, 0, 0);
+
+    const reminderDateTime = new Date(taskDateTime.getTime() - (task.reminderTime * 60 * 1000));
+    const now = new Date();
+
+    if (reminderDateTime <= now) {
+      return null; // Reminder time has passed
+    }
+
+    const timeUntilReminder = reminderDateTime.getTime() - now.getTime();
+
+    return setTimeout(() => {
+      sendEmailReminder(task);
+    }, timeUntilReminder);
+  };
+
+  // Send email reminder using EmailJS
+  const sendEmailReminder = async (task) => {
+    console.log('📧 DEBUG - sendEmailReminder called with task:', task);
+    console.log('📧 DEBUG - userEmail variable:', userEmail);
+    
+    if (!userEmail) {
+      console.log('❌ DEBUG - No user email provided');
+      return;
+    }
+
+    try {
+      // Load EmailJS if not already loaded
+      const emailjs = await loadEmailJS();
+      const cleanEmail2 = userEmail.trim().toLowerCase();
+      // Email template parameters
+      const templateParams = {
+        to_email: cleanEmail2,
+        task_name: task.text,
+        task_time: task.time,
+        task_date: new Date(task.dateKey).toLocaleDateString(),
+        reminder_minutes: task.reminderTime,
+        user_name: cleanEmail2.split('@')[0] // Use email username as name
+      };
+
+      console.log('📧 DEBUG - User email from state:', userEmail);
+      console.log('📧 DEBUG - Email type:', typeof userEmail);
+      console.log('📧 DEBUG - Email length:', userEmail.length);
+      console.log('📧 DEBUG - Email contains @:', userEmail.includes('@'));
+      console.log('📧 DEBUG - Email trimmed:', userEmail.trim());
+      console.log('📧 DEBUG - Email char codes:', Array.from(userEmail).map(c => c.charCodeAt(0)));
+      console.log('📧 DEBUG - Full template params:', templateParams);
+      console.log('📧 DEBUG - to_email specifically:', JSON.stringify(templateParams.to_email));
+      
+      // Let's also test with a simple, clean email
+      const cleanEmail = userEmail.trim().toLowerCase();
+      const cleanTemplateParams = {
+        to_email: cleanEmail,
+        task_name: task.text,
+        task_time: task.time,
+        task_date: new Date(task.dateKey).toLocaleDateString(),
+        reminder_minutes: task.reminderTime,
+        user_name: cleanEmail.split('@')[0]
+      };
+      
+      console.log('📧 DEBUG - Clean template params:', cleanTemplateParams);
+      
+      // Send the email using EmailJS
+      await emailjs.send(
+        emailjsConfig.serviceId, 
+        emailjsConfig.templateId, 
+        cleanTemplateParams  // Use the cleaned parameters
+      );
+      
+      console.log('✅ Email reminder sent successfully!');
+      
+      // Show browser notification as backup
+      if (Notification.permission === 'granted') {
+        new Notification(`📧 Reminder Sent: ${task.text}`, {
+          body: `Email reminder sent for task scheduled at ${task.time}`,
+          icon: '📧'
+        });
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to send email reminder:', error);
+      
+      // Show browser notification as fallback
+      if (Notification.permission === 'granted') {
+        new Notification(`📅 Task Reminder: ${task.text}`, {
+          body: `Scheduled for ${task.time} - in ${task.reminderTime} minutes!`,
+          icon: '📅'
+        });
+      }
+    }
+  };
+
+  // Request notification permission
+  const requestNotificationPermission = async () => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      await Notification.requestPermission();
     }
   };
 
@@ -109,6 +293,7 @@ export default function WeeklyTodoApp() {
         completed: false,
         priority: false,
         time: selectedTime || null,
+        reminderTime: selectedTime && userEmail ? reminderTime : null,
         createdAt: targetDate.toLocaleDateString(),
         dateKey: getDateKey(targetDate)
       };
@@ -136,6 +321,7 @@ export default function WeeklyTodoApp() {
         completed: false,
         priority: false,
         time: modalSelectedTime || null,
+        reminderTime: modalSelectedTime && userEmail ? modalReminderTime : null,
         createdAt: modalDate.toLocaleDateString(),
         dateKey: getDateKey(modalDate)
       };
@@ -160,12 +346,20 @@ export default function WeeklyTodoApp() {
     setModalDate(date);
     setModalInputValue('');
     setModalSelectedTime('');
+    setModalReminderTime('30');
   };
 
   const closeDayModal = () => {
     setModalDate(null);
     setModalInputValue('');
     setModalSelectedTime('');
+    setModalReminderTime('30');
+  };
+
+  // Save settings
+  const saveSettings = () => {
+    setShowSettings(false);
+    scheduleAllReminders(); // Reschedule with new settings
   };
 
   // Get available times for modal
@@ -195,6 +389,16 @@ export default function WeeklyTodoApp() {
   };
 
   const deleteTask = (id, dateKey) => {
+    // Clear reminder if it exists
+    if (activeReminders.has(id)) {
+      clearTimeout(activeReminders.get(id));
+      setActiveReminders(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(id);
+        return newMap;
+      });
+    }
+
     setTasks(prev => ({
       ...prev,
       [dateKey]: (prev[dateKey] || []).filter(task => task.id !== id)
@@ -280,6 +484,104 @@ export default function WeeklyTodoApp() {
     setSelectedTime('');
   };
 
+  const renderSettingsModal = () => {
+    if (!showSettings) return null;
+
+    return (
+      <div 
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+        onClick={() => setShowSettings(false)}
+      >
+        <div 
+          className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 w-full max-w-md overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Settings Header */}
+          <div className="p-6 bg-gradient-to-r from-purple-500 to-blue-500">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Mail size={24} className="text-white" />
+                <h2 className="text-2xl font-bold text-white">Email Reminders</h2>
+              </div>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="p-2 bg-white/20 backdrop-blur-sm border border-white/30 text-white rounded-xl hover:bg-white/30 transition-all duration-200"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-6">
+            <div className="space-y-4">
+              {/* Email Address Input */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Mail size={18} className="text-purple-600" />
+                  <h3 className="text-lg font-semibold text-gray-800">Your Email Address</h3>
+                </div>
+                <input
+                  type="email"
+                  value={userEmail}
+                  onChange={(e) => setUserEmail(e.target.value)}
+                  placeholder="Enter your email address"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white"
+                />
+                <p className="text-sm text-gray-600">
+                  You'll receive email reminders for your scheduled tasks
+                </p>
+              </div>
+
+              {/* Status Indicator */}
+              <div className="p-4 rounded-xl border-2 border-dashed border-gray-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className={`w-3 h-3 rounded-full ${userEmail ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                  <span className="font-medium">
+                    {userEmail ? '✅ Email reminders enabled!' : '📧 Enter email to enable reminders'}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600">
+                  {userEmail 
+                    ? 'You can now set reminder times when creating tasks with scheduled times.'
+                    : 'Add your email address above to receive task reminders.'
+                  }
+                </p>
+              </div>
+
+              {/* How it works */}
+              <div className="bg-blue-50 p-4 rounded-xl">
+                <h4 className="font-semibold text-blue-800 mb-2">📚 How it works:</h4>
+                <ul className="text-sm text-blue-700 space-y-1 list-disc list-inside">
+                  <li>Create a task with a specific time</li>
+                  <li>Choose when to receive a reminder (15min, 30min, 1hr, or 2hrs before)</li>
+                  <li>Get an email reminder at your chosen time</li>
+                  <li>Never miss an important task again!</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* Settings Footer */}
+          <div className="p-6 bg-gray-50 border-t border-gray-200 flex gap-3">
+            <button
+              onClick={() => setShowSettings(false)}
+              className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveSettings}
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-xl hover:from-purple-600 hover:to-blue-600 transition-all duration-200 flex items-center justify-center gap-2"
+            >
+              <Save size={18} />
+              Save Settings
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderMonthlyView = () => {
     const daysInMonth = getDaysInMonth(currentDate);
     const firstDay = getFirstDayOfMonth(currentDate);
@@ -319,7 +621,7 @@ export default function WeeklyTodoApp() {
             {dayTasks.slice(0, 2).map(task => (
               <div
                 key={task.id}
-                className={`text-xs p-1 rounded truncate ${
+                className={`text-xs p-1 rounded truncate relative ${
                   task.completed
                     ? 'bg-green-100 text-green-700 line-through'
                     : task.priority
@@ -328,6 +630,9 @@ export default function WeeklyTodoApp() {
                 }`}
               >
                 {task.time && <span className="font-medium">{task.time} </span>}
+                {task.reminderTime && (
+                  <span className="absolute -top-1 -right-1 text-xs">📧</span>
+                )}
                 {task.text}
               </div>
             ))}
@@ -423,6 +728,7 @@ export default function WeeklyTodoApp() {
               const dayTasks = getTasksForDate(dayDate);
               const taskCount = dayTasks.length;
               const completedCount = dayTasks.filter(task => task.completed).length;
+              const hasReminders = dayTasks.some(task => task.reminderTime);
               const isCurrentDay = day.key === today.getDay();
               const isSelected = day.key === selectedDay;
               
@@ -452,6 +758,9 @@ export default function WeeklyTodoApp() {
                   </div>
                   {isCurrentDay && (
                     <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full"></div>
+                  )}
+                  {hasReminders && (
+                    <div className="absolute -top-1 -left-1 text-xs">📧</div>
                   )}
                 </button>
               );
@@ -516,12 +825,12 @@ export default function WeeklyTodoApp() {
                     </button>
                   </div>
                   
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <div className="flex items-center gap-2 text-white/80 text-sm">
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                       </svg>
-                      <span>Time (optional):</span>
+                      <span>Time:</span>
                     </div>
                     {availableTimes.length > 0 ? (
                       <>
@@ -552,6 +861,46 @@ export default function WeeklyTodoApp() {
                       </span>
                     )}
                   </div>
+
+                  {/* Reminder Options */}
+                  {selectedTime && userEmail && (
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 text-white/80 text-sm">
+                        <Mail size={16} />
+                        <span>Reminder:</span>
+                      </div>
+                      <select
+                        value={reminderTime}
+                        onChange={(e) => setReminderTime(e.target.value)}
+                        className="px-3 py-2 bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-white/50 focus:bg-white/30"
+                      >
+                        {reminderOptions.map(option => (
+                          <option key={option.value} value={option.value} className="text-gray-800">
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Email Setup Prompt */}
+                  {selectedTime && !userEmail && (
+                    <div className="p-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl">
+                      <div className="flex items-center gap-2 text-white/90 text-sm mb-2">
+                        <Mail size={16} />
+                        <span className="font-medium">Want email reminders?</span>
+                      </div>
+                      <p className="text-white/70 text-xs mb-3">
+                        Set up your email to get reminders before your tasks
+                      </p>
+                      <button
+                        onClick={() => setShowSettings(true)}
+                        className="px-4 py-2 bg-white/20 backdrop-blur-sm border border-white/30 text-white rounded-lg hover:bg-white/30 transition-all duration-200 text-sm"
+                      >
+                        Set up email reminders
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -671,6 +1020,12 @@ export default function WeeklyTodoApp() {
                                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                                 </svg>
                                 {new Date(`2000-01-01T${task.time}`).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}
+                                {task.reminderTime && (
+                                  <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1">
+                                    <Mail size={10} />
+                                    {task.reminderTime}m before
+                                  </span>
+                                )}
                               </div>
                             )}
                             <span
@@ -735,6 +1090,12 @@ export default function WeeklyTodoApp() {
                   </div>
                   <div className="text-gray-500">Priority</div>
                 </div>
+                <div className="text-center">
+                  <div className="font-bold text-blue-600">
+                    {selectedTasks.filter(t => t.reminderTime && !t.completed).length}
+                  </div>
+                  <div className="text-gray-500">Reminders</div>
+                </div>
               </div>
             </div>
           )}
@@ -755,8 +1116,8 @@ export default function WeeklyTodoApp() {
             {viewMode === 'weekly' ? 'Organize your week, one day at a time' : 'Plan your entire month at a glance'}
           </p>
           
-          {/* View Mode Toggle */}
-          <div className="flex items-center justify-center gap-2 mt-4">
+          {/* View Mode Toggle & Settings */}
+          <div className="flex items-center justify-center gap-4 mt-4">
             <div className="flex bg-white/80 backdrop-blur-sm rounded-xl p-1 shadow-lg border border-white/20">
               <button
                 onClick={() => setViewMode('weekly')}
@@ -781,11 +1142,30 @@ export default function WeeklyTodoApp() {
                 Monthly View
               </button>
             </div>
+
+            {/* Settings Button */}
+            <button
+              onClick={() => {
+                setShowSettings(true);
+                requestNotificationPermission();
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 shadow-lg border ${
+                userEmail
+                  ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
+                  : 'bg-white/80 border-white/20 text-gray-600 hover:text-purple-600'
+              } backdrop-blur-sm`}
+            >
+              <Settings size={16} />
+              {userEmail ? 'Email Setup ✓' : 'Email Setup'}
+            </button>
           </div>
         </div>
 
         {/* Render appropriate view */}
         {viewMode === 'weekly' ? renderWeeklyView() : renderMonthlyView()}
+
+        {/* Settings Modal */}
+        {renderSettingsModal()}
 
         {/* Day Modal */}
         {modalDate && (
@@ -849,7 +1229,7 @@ export default function WeeklyTodoApp() {
                           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                           </svg>
-                          <span>Time (optional):</span>
+                          <span>Time:</span>
                         </div>
                         {getModalAvailableTimes().length > 0 ? (
                           <>
@@ -880,6 +1260,27 @@ export default function WeeklyTodoApp() {
                           </span>
                         )}
                       </div>
+
+                      {/* Modal Reminder Options */}
+                      {modalSelectedTime && userEmail && (
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2 text-white/80 text-sm">
+                            <Mail size={16} />
+                            <span>Reminder:</span>
+                          </div>
+                          <select
+                            value={modalReminderTime}
+                            onChange={(e) => setModalReminderTime(e.target.value)}
+                            className="px-3 py-2 bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-white/50 focus:bg-white/30"
+                          >
+                            {reminderOptions.map(option => (
+                              <option key={option.value} value={option.value} className="text-gray-800">
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -954,6 +1355,12 @@ export default function WeeklyTodoApp() {
                                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                                           </svg>
                                           {new Date(`2000-01-01T${task.time}`).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}
+                                          {task.reminderTime && (
+                                            <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1">
+                                              <Mail size={10} />
+                                              {task.reminderTime}m before
+                                            </span>
+                                          )}
                                         </div>
                                       )}
                                       <span
@@ -969,6 +1376,9 @@ export default function WeeklyTodoApp() {
                                     {task.priority && !task.completed && (
                                       <Star size={14} className="text-amber-500 fill-amber-500 flex-shrink-0 mt-0.5" />
                                     )}
+                                  </div>
+                                  <div className="text-xs text-gray-400 mt-1">
+                                    Added {task.createdAt}
                                   </div>
                                 </div>
                                 
@@ -1004,7 +1414,7 @@ export default function WeeklyTodoApp() {
         )}
       </div>
 
-      <style jsx>{`
+      <style>{`
         @keyframes slideIn {
           from {
             opacity: 0;
